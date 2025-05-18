@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"time"
@@ -15,6 +14,7 @@ func main() {
 	port := flag.String("port", "443", "Target TCP port (default 443)")
 	serverName := flag.String("servername", "", "SNI server name (defaults to host)")
 	insecure := flag.Bool("insecure", false, "Skip TLS certificate verification (not recommended)")
+	timeout := flag.Int("timeout", 5, "connect timeout")
 	flag.Parse()
 
 	log.SetFlags(log.Lshortfile)
@@ -36,13 +36,13 @@ func main() {
 
 	// Use modern Dialer (Go 1.24+; DualStack removed)
 	dialer := &net.Dialer{
-		Timeout: 5 * time.Second,
+		Timeout: time.Duration(*timeout) * time.Second,
 	}
 
 	// Display connection parameters
-	fmt.Printf("Connecting to:   %s\n", addr)
-	fmt.Printf("TLS server name: %s\n", tlsConfig.ServerName)
-	fmt.Printf("Insecure TLS:    %v\n", *insecure)
+	log.Printf("Connecting to:   %s\n", addr)
+	log.Printf("TLS server name: %s\n", tlsConfig.ServerName)
+	log.Printf("Insecure TLS:    %v\n", *insecure)
 
 	// Establish TLS connection
 	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
@@ -54,10 +54,10 @@ func main() {
 	// Retrieve and print peer certificates
 	state := conn.ConnectionState()
 	for i, cert := range state.PeerCertificates {
-		fmt.Printf("Certificate %d Subject: %s\n", i+1, cert.Subject)
+		log.Printf("Certificate %d Subject: %s\n", i+1, cert.Subject)
 	}
 
 	// TLS handshake info
-	log.Printf("TLS handshake complete: %v", state.HandshakeComplete)
-	log.Printf("Mutual protocol negotiated: %v", state.NegotiatedProtocolIsMutual)
+	log.Printf("TLS handshake complete: %v\n", state.HandshakeComplete)
+	log.Printf("Mutual protocol negotiated: %v\n", state.NegotiatedProtocolIsMutual)
 }
