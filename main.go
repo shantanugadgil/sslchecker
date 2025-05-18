@@ -17,7 +17,7 @@ func main() {
 	timeout := flag.Int("timeout", 5, "connect timeout")
 	flag.Parse()
 
-	log.SetFlags(log.Lshortfile)
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
 	// Compose address
 	addr := net.JoinHostPort(*host, *port)
@@ -51,10 +51,20 @@ func main() {
 	}
 	defer conn.Close()
 
+	if err := conn.Handshake(); err != nil {
+		log.Printf("TLS handshake failed: %v", err)
+		return
+	}
+	log.Printf("Connection Handshake succeeded\n")
+
 	// Retrieve and print peer certificates
 	state := conn.ConnectionState()
 	for i, cert := range state.PeerCertificates {
-		log.Printf("Certificate %d Subject: %s\n", i+1, cert.Subject)
+		log.Printf("Certificate #%d: Subject: %s\n", i+1, cert.Subject)
+		log.Printf("  Subject: %s\n", cert.Subject.String())
+		log.Printf("  Issuer:  %s\n", cert.Issuer.String())
+		log.Printf("  NotBefore: %s\n", cert.NotBefore)
+		log.Printf("  NotAfter:  %s\n", cert.NotAfter)
 	}
 
 	// TLS handshake info
