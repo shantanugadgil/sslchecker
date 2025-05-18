@@ -1,2 +1,2 @@
 # sslchecker
-SSL Checker
+This is an SSL Checker
