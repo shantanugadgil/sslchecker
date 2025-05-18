@@ -2,65 +2,62 @@ package main
 
 import (
 	"crypto/tls"
-	//"crypto/x509"
 	"flag"
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"strings"
 	"time"
 )
 
 func main() {
-	host := flag.String("host", "localhost", "hostname")
-	port := flag.String("port", "443", "port")
-	servername := flag.String("servername", "", "servername")
-	insecure := flag.Bool("insecure", false, "insecure or not")
-	log.SetFlags(log.Lshortfile)
+	// CLI flags
+	host := flag.String("host", "localhost", "Target hostname or IP address")
+	port := flag.String("port", "443", "Target TCP port (default 443)")
+	serverName := flag.String("servername", "", "SNI server name (defaults to host)")
+	insecure := flag.Bool("insecure", false, "Skip TLS certificate verification (not recommended)")
 	flag.Parse()
 
-	dialer := &net.Dialer{
-		Timeout:   5000 * time.Millisecond,
-		DualStack: false,
-		LocalAddr: nil,
-	}
-	addr := *host + ":" + *port
+	log.SetFlags(log.Lshortfile)
 
-	myservername := *servername
-	if myservername == "" {
-		myservername = *host
+	// Compose address
+	addr := net.JoinHostPort(*host, *port)
+
+	// Determine server name (SNI)
+	sni := *serverName
+	if sni == "" {
+		sni = *host
 	}
 
-	conf := &tls.Config{
+	// Create a TLS config
+	tlsConfig := &tls.Config{
 		InsecureSkipVerify: *insecure,
-		ServerName:         myservername,
+		ServerName:         sni,
 	}
 
-	fmt.Printf("addrress: [%v]\n", addr)
-	fmt.Printf("servername: [%v]\n", conf.ServerName)
-	fmt.Printf("insecure [%v]\n", *insecure)
+	// Use modern Dialer (Go 1.24+; DualStack removed)
+	dialer := &net.Dialer{
+		Timeout: 5 * time.Second,
+	}
 
-	conn, err := tls.DialWithDialer(dialer, "tcp4", addr, conf)
+	// Display connection parameters
+	fmt.Printf("Connecting to:   %s\n", addr)
+	fmt.Printf("TLS server name: %s\n", tlsConfig.ServerName)
+	fmt.Printf("Insecure TLS:    %v\n", *insecure)
 
+	// Establish TLS connection
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 	if err != nil {
-		log.Println(err)
-		os.Exit(2)
+		log.Fatalf("Failed to connect: %v", err)
 	}
-
 	defer conn.Close()
-	if err != nil && strings.Contains(err.Error(), "timed out") {
-		fmt.Println("Connection timed out")
-		os.Exit(3)
-	}
 
+	// Retrieve and print peer certificates
 	state := conn.ConnectionState()
-	for _, v := range state.PeerCertificates {
-		//fmt.Println(x509.MarshalPKIXPublicKey(v.PublicKey))
-		fmt.Println(v.Subject)
+	for i, cert := range state.PeerCertificates {
+		fmt.Printf("Certificate %d Subject: %s\n", i+1, cert.Subject)
 	}
-	log.Println("client: handshake: ", state.HandshakeComplete)
-	log.Println("client: mutual: ", state.NegotiatedProtocolIsMutual)
 
-	conn.Close()
+	// TLS handshake info
+	log.Printf("TLS handshake complete: %v", state.HandshakeComplete)
+	log.Printf("Mutual protocol negotiated: %v", state.NegotiatedProtocolIsMutual)
 }
